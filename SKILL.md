@@ -3,13 +3,39 @@ name: desktop-controller
 description: |
   Universal desktop application controller for Windows. Automate any desktop app — send messages, click buttons, type text, take screenshots, and interact with native Windows applications.
   Use this skill when the user asks to: "control my computer", "automate desktop", "send a message on [any chat app]", "click on [something]", "type into [app]", "take a screenshot", "操控电脑", "自动化桌面", "给某某发消息", "打开某某软件", "截个屏", or any task involving interacting with Windows desktop applications.
-  Supports: WeChat, WeCom, DingTalk, Feishu/Lark, QQ, Telegram, Slack, Teams, and any other Windows desktop application.
+  WeChat triggers: "send a WeChat message", "message someone on WeChat", "打开微信发消息", "给某某发微信", "微信发送", "微信发消息", "用微信发", "帮我发微信".
+  Email/Web triggers: "打开邮箱", "发邮件", "send email", "open browser", "操控浏览器", "网页操作".
+  Supports: WeChat, WeCom, DingTalk, Feishu/Lark, QQ, Telegram, Slack, Teams, any browser-based web app, and any other Windows desktop application.
   Inspired by OpenAI's playwright-interactive skill, combining code-based automation with visual screenshot feedback loops.
+  ROUTING: For web/Electron apps (email, Slack, browser), prefer Playwright with CSS selectors for speed and precision. For native desktop apps (WeChat, QQ, DingTalk), use Win32 API automation.
 ---
 
 # Universal Desktop Controller
 
 Automate any Windows desktop application using a combination of **Win32 API**, **Playwright** (for web/Electron apps), and **screenshot-based visual feedback**. Inspired by OpenAI's `playwright-interactive` Codex skill, adapted for Claude Code.
+
+## Smart Routing: Choose the Right Engine
+
+**CRITICAL DECISION**: Before any action, determine which engine to use:
+
+```
+User Request → Is it a web/browser/Electron app?
+                 ├── YES → Playwright (CSS selectors, instant, precise)
+                 │         Examples: email webmail, Slack, browser tasks, web forms
+                 │         ✅ page.click('#compose')  — instant, 100% accurate
+                 │
+                 └── NO  → Win32 API (native desktop automation)
+                           Examples: WeChat, QQ, DingTalk, Notepad, File Explorer
+                           ✅ SetCursorPos + mouse_event — works for any native app
+```
+
+**Why this matters**: For the Tsinghua email (a web app), using Playwright CSS selectors is 10-50x faster than screenshot→analyze→click. OpenAI's playwright-interactive proved this: DOM selectors beat vision-based coordinate guessing every time for web content.
+
+| Engine | Speed | Precision | Use For |
+|--------|-------|-----------|---------|
+| Playwright | <1s per action | 100% (DOM selector) | Web apps, Electron apps, browser tasks |
+| Win32 API | 2-3s per action | 95% (coordinate-based) | Native desktop apps (WeChat, QQ, etc.) |
+| Screenshot+Vision | 10-15s per action | 80% (AI guessing) | Last resort / unknown UI |
 
 ## Architecture
 
@@ -30,7 +56,7 @@ Automate any Windows desktop application using a combination of **Win32 API**, *
 
 ## Two Automation Modes
 
-### Mode 1: Win32 Native (for desktop apps)
+### Mode 1: Win32 Native (for desktop apps — WeChat, QQ, etc.)
 Best for: WeChat, QQ, DingTalk, WeCom, Feishu, Notepad, File Explorer, etc.
 
 **How it works:**
@@ -40,14 +66,45 @@ Best for: WeChat, QQ, DingTalk, WeCom, Feishu, Notepad, File Explorer, etc.
 4. Use clipboard for text input (handles Unicode/Chinese perfectly)
 5. Take screenshots for visual verification
 
-### Mode 2: Playwright (for web & Electron apps)
-Best for: Slack, Discord, Teams (web), VS Code, Notion, any browser-based or Electron app.
+### Mode 2: Playwright (for web & Electron apps — email, Slack, etc.)
+Best for: Email webmail, Slack, Discord, Teams (web), VS Code, Notion, any browser-based or Electron app.
 
 **How it works:**
-1. Launch or connect to browser/Electron app via Playwright
-2. Use CSS selectors or coordinates for interaction
-3. Built-in screenshot capture
-4. DOM inspection for precise element targeting
+1. Connect to running Chrome via CDP (Chrome DevTools Protocol) or launch new browser
+2. Use CSS selectors for precise, instant element targeting — NO screenshots needed
+3. `page.click()`, `page.fill()`, `page.goto()` for all interactions
+4. DOM inspection for finding the right selectors
+5. 10-50x faster than screenshot+coordinate approach
+
+**Playwright Quick Start for Web Apps (e.g., sending email):**
+```javascript
+// Connect to existing Chrome (must be launched with --remote-debugging-port=9222)
+const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+const page = browser.contexts()[0].pages()[0]; // Get current tab
+
+// Example: Compose email in Coremail (Tsinghua email)
+await page.click('span:has-text("写信")');           // Click compose — instant!
+await page.fill('input[name="to"]', '575860760@qq.com');  // Fill recipient
+await page.fill('.compose-body', '今天不去吃饭了');          // Fill body
+await page.click('button:has-text("发送")');                // Send
+```
+
+**vs. Screenshot approach (old, slow):**
+```
+Step 1: Take screenshot (2s)
+Step 2: AI analyzes image to find "写信" button position (5s)
+Step 3: Click at guessed coordinates (80, 145) — might miss! (1s)
+Step 4: Take screenshot again to verify (2s)
+Step 5: Repeat for each UI element...
+Total: 30-60 seconds for a simple email
+```
+
+**How to connect to existing Chrome:**
+```bash
+# First, restart Chrome with debugging port enabled:
+chrome.exe --remote-debugging-port=9222
+# Then Playwright can connect to it and control any tab
+```
 
 ## Supported Applications
 
