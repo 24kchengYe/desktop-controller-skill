@@ -1,3 +1,4 @@
+\![Visitors](https://visitor-badge.laobi.icu/badge?page_id=24kchengYe.desktop-controller-skill)
 # Desktop Controller — AI Computer Use for Claude Code
 
 > **The open-source alternative to OpenAI Codex's computer use.** Control any Windows app — native desktop, web, and Electron — with a single AI skill. Like [OpenAI's playwright-interactive](https://github.com/openai/skills/tree/main/skills/.curated/playwright-interactive), but with **native Win32 desktop app support** that Codex can't do.
